@@ -674,7 +674,7 @@ Pass TIMEOUT to `eglot--with-timeout'."
         (((CodeAction) _title _edit _command)
          (ert-fail "Shouldn't have destructured this object as a CodeAction")))))))
 
-(ert-deftest eglot-nicknome ()
+(ert-deftest eglot-nickname ()
   "project nickname handling"
   (should nil))
 
