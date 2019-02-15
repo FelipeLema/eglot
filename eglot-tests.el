@@ -674,9 +674,19 @@ Pass TIMEOUT to `eglot--with-timeout'."
         (((CodeAction) _title _edit _command)
          (ert-fail "Shouldn't have destructured this object as a CodeAction")))))))
 
-(ert-deftest eglot-nickname ()
+(ert-deftest eglot-nicknaming ()
   "project nickname handling"
-  (should nil))
+  (should (eglot--no-repeated? (mapcar #'number-to-string (number-sequence 1 3))))
+  (should (not (eglot--no-repeated? (append
+				     (mapcar #'number-to-string
+					     (number-sequence 1 3))
+				     '("2")))))
+  (should (equal (eglot--unique-nicknames '("/a/b/c" "/1/bb/c"))
+		 '("c<b>" "c<bb>" )))
+  (should (equal (eglot--unique-nicknames '("/a/b/c" "/1/2/3"))
+		 '("c" "3" )))
+  (should (equal (eglot--unique-nicknames '("/a/b/c" "/a/bb/c" "/1/2/3"))
+		 '("c<b>" "c<bb>" "3" ))))
 
 (provide 'eglot-tests)
 ;;; eglot-tests.el ends here

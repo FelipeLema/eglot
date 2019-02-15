@@ -60,6 +60,7 @@
 (require 'project)
 (require 'url-parse)
 (require 'url-util)
+(require 'rx)
 (require 'pcase)
 (require 'compile) ; for some faces
 (require 'warnings)
@@ -940,12 +941,74 @@ CONNECT-ARGS are passed as additional arguments to
              (eglot--error "Could not start and connect to server%s"
                            (if inferior
                                (format " started with %s"
-                                       (process-command inferior))
+                                  (process-command inferior))
                              "!")))))))
 
 
 ;;; Helpers (move these to API?)
 ;;;
+(defun eglot--nickname-for (project-directory)
+  "Nickname for a certain PROJECT-DIRECTORY."
+  (file-name-base project-directory))
+
+(defun eglot--no-repeated? (names)
+  "Tell if NAMES has repeated elements."
+  (let ((unique-names (delete-dups (copy-tree names))))
+    (= (length names) (length unique-names))))
+
+(defun eglot--dir-split (directory)
+  "Split DIRECTORY into a list of strings per directory separator."
+  (let ((dir-sep-re (rx (eval
+			 ;; get dir separator
+			 (substring (file-name-as-directory "a") 1 2 )))))
+    (save-match-data
+      (split-string directory dir-sep-re t))))
+
+(defun eglot--add-unique-suffix (project-directories)
+  "Add some suffix to each dir in PROJECT-DIRECTORIES to tell them apart.
+
+All elements in PROJECT-DIRECTORIES must have same nickname per
+`eglot--nickname-for'."
+  (let* ((directories-n-names (mapcar (lambda (dir)
+					(length (eglot--dir-split dir)))
+				      project-directories))
+	 (max-directory-deep (apply 'cl-gcd directories-n-names)))
+    ;; pick basename, basname of dirname, basename of dirname×2 …
+    ;; until we have no repeated nicknames
+    (cl-loop for ith-dir to max-directory-deep
+	     with current-nicknames = nil
+	     do (setq current-nicknames
+		      (mapcar (lambda (dir)
+				(let ((ith-name
+				       ;; ith-name from last to first
+				       (nth 1 (last
+					       (eglot--dir-split dir)
+					       ith-dir))))
+				  (format "%s<%s>"
+				     (eglot--nickname-for dir)
+				     ith-name)))
+			      project-directories))
+	     until (eglot--no-repeated? current-nicknames)
+	     finally return current-nicknames)))
+
+(defun eglot--unique-nicknames (project-directories)
+  "Return a list of unique nicknames for each name in PROJECT-DIRECTORIES.
+Calls `eglot--nickname-for' on each name and then ensures all names are unique
+by adding a suffix on repeated nicknames"
+  (let* ((nickname-candidates
+	  (mapcar #'eglot--nickname-for project-directories)))
+    (if (eglot--no-repeated? nickname-candidates)
+	nickname-candidates
+      ;;else, add corresponding suffixes
+      (let ((grouped-by-nicknames
+	     (seq-group-by #'eglot--nickname-for project-directories)))
+	(cl-loop for (nick . same-nick-proj-dirs) in grouped-by-nicknames
+		 append (if (= 1 (length same-nick-proj-dirs))
+			    ;; single-element list (one dir, one nick)
+			    (list nick)
+			  ;; else, multiple dirs under same nick
+			  (eglot--add-unique-suffix same-nick-proj-dirs)))))))
+
 (defun eglot--error (format &rest args)
   "Error out with FORMAT with ARGS."
   (error "[eglot] %s" (apply #'format format args)))
