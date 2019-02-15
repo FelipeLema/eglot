@@ -682,11 +682,13 @@ Pass TIMEOUT to `eglot--with-timeout'."
 					     (number-sequence 1 3))
 				     '("2")))))
   (should (equal (eglot--unique-nicknames '("/a/b/c" "/1/bb/c"))
-		 '("c<b>" "c<bb>" )))
+		 '("c<b>" "c<bb>")))
   (should (equal (eglot--unique-nicknames '("/a/b/c" "/1/2/3"))
-		 '("c" "3" )))
+		 '("c" "3")))
   (should (equal (eglot--unique-nicknames '("/a/b/c" "/a/bb/c" "/1/2/3"))
-		 '("c<b>" "c<bb>" "3" ))))
+		 '("c<b>" "c<bb>" "3")))
+  (should (equal (eglot--unique-nicknames '("/a/b/c" "/1/2/3" "/a/bb/c"))
+		 '("c<b>" "3" "c<bb>"))))
 
 (provide 'eglot-tests)
 ;;; eglot-tests.el ends here

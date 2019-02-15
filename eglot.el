@@ -772,7 +772,7 @@ Each function is passed the server as an argument")
   "Connect to MANAGED-MAJOR-MODE, PROJECT, CLASS and CONTACT.
 This docstring appeases checkdoc, that's all."
   (let* ((default-directory (car (project-roots project)))
-         (nickname (file-name-base (directory-file-name default-directory)))
+	 (nickname (file-name-base (directory-file-name default-directory)))
          (readable-name (format "EGLOT (%s/%s)" nickname managed-major-mode))
          autostart-inferior-process
          (contact (if (functionp contact) (funcall contact) contact))
@@ -803,7 +803,7 @@ This docstring appeases checkdoc, that's all."
                                 :stderr (get-buffer-create
                                          (format "*%s stderr*" readable-name))))))))
          (spread (lambda (fn) (lambda (server method params)
-                                (apply fn server method (append params nil)))))
+                           (apply fn server method (append params nil)))))
          (server
           (apply
            #'make-instance class
@@ -840,42 +840,42 @@ This docstring appeases checkdoc, that's all."
                             :capabilities (eglot-client-capabilities server))
                       :success-fn
                       (eglot--lambda ((InitializeResult) capabilities)
-                        (unless cancelled
-                          (push server
-                                (gethash project eglot--servers-by-project))
-                          (setf (eglot--capabilities server) capabilities)
-                          (jsonrpc-notify server :initialized `(:__dummy__ t))
-                          (dolist (buffer (buffer-list))
-                            (with-current-buffer buffer
-                              (eglot--maybe-activate-editing-mode server)))
-                          (setf (eglot--inhibit-autoreconnect server)
-                                (cond
-                                 ((booleanp eglot-autoreconnect)
-                                  (not eglot-autoreconnect))
-                                 ((cl-plusp eglot-autoreconnect)
-                                  (run-with-timer
-                                   eglot-autoreconnect nil
-                                   (lambda ()
-                                     (setf (eglot--inhibit-autoreconnect server)
-                                           (null eglot-autoreconnect)))))))
-                          (let ((default-directory (car (project-roots project)))
-                                (major-mode managed-major-mode))
-                            (hack-dir-local-variables-non-file-buffer)
-                            (run-hook-with-args 'eglot-connect-hook server)
-                            (run-hook-with-args 'eglot-server-initialized-hook server))
-                          (eglot--message
-                           "Connected! Server `%s' now managing `%s' buffers \
+				     (unless cancelled
+				       (push server
+					     (gethash project eglot--servers-by-project))
+				       (setf (eglot--capabilities server) capabilities)
+				       (jsonrpc-notify server :initialized `(:__dummy__ t))
+				       (dolist (buffer (buffer-list))
+					 (with-current-buffer buffer
+					   (eglot--maybe-activate-editing-mode server)))
+				       (setf (eglot--inhibit-autoreconnect server)
+					     (cond
+					      ((booleanp eglot-autoreconnect)
+					       (not eglot-autoreconnect))
+					      ((cl-plusp eglot-autoreconnect)
+					       (run-with-timer
+						eglot-autoreconnect nil
+						(lambda ()
+						  (setf (eglot--inhibit-autoreconnect server)
+							(null eglot-autoreconnect)))))))
+				       (let ((default-directory (car (project-roots project)))
+					     (major-mode managed-major-mode))
+					 (hack-dir-local-variables-non-file-buffer)
+					 (run-hook-with-args 'eglot-connect-hook server)
+					 (run-hook-with-args 'eglot-server-initialized-hook server))
+				       (eglot--message
+					"Connected! Server `%s' now managing `%s' buffers \
 in project `%s'."
-                           (jsonrpc-name server) managed-major-mode
-                           (eglot--project-nickname server))
-                          (when tag (throw tag t))))
+					(jsonrpc-name server) managed-major-mode
+					(eglot--project-nickname server))
+				       (when tag (throw tag t))))
                       :timeout eglot-connect-timeout
                       :error-fn (eglot--lambda ((ResponseError) code message)
-                                  (unless cancelled
-                                    (jsonrpc-shutdown server)
-                                    (let ((msg (format "%s: %s" code message)))
-                                      (if tag (throw tag `(error . ,msg))
-                                        (eglot--error msg)))))
+					       (unless cancelled
+						 (jsonrpc-shutdown server)
+						 (let ((msg (format "%s: %s" code message)))
+						   (if tag (throw tag `(error . ,msg))
+						     (eglot--error msg)))))
                       :timeout-fn (lambda ()
                                     (unless cancelled
                                       (jsonrpc-shutdown server)
@@ -967,6 +967,8 @@ CONNECT-ARGS are passed as additional arguments to
 (defun eglot--add-unique-suffix (project-directories)
   "Add some suffix to each dir in PROJECT-DIRECTORIES to tell them apart.
 
+Returns a list of (project-directory . unique-nickname).
+
 All elements in PROJECT-DIRECTORIES must have same nickname per
 `eglot--nickname-for'."
   (let* ((directories-n-names (mapcar (lambda (dir)
@@ -975,18 +977,19 @@ All elements in PROJECT-DIRECTORIES must have same nickname per
 	 (max-directory-deep (apply 'cl-gcd directories-n-names)))
     ;; pick basename, basname of dirname, basename of dirname×2 …
     ;; until we have no repeated nicknames
-    (cl-loop for ith-dir to max-directory-deep
+    (cl-loop for ith-dir from 2 to max-directory-deep
 	     with current-nicknames = nil
 	     do (setq current-nicknames
 		      (mapcar (lambda (dir)
-				(let ((ith-name
-				       ;; ith-name from last to first
-				       (nth 1 (last
-					       (eglot--dir-split dir)
-					       ith-dir))))
-				  (format "%s<%s>"
-				     (eglot--nickname-for dir)
-				     ith-name)))
+				(let* ((ith-name
+					;; ith-name from last to first
+					(car (last
+					      (eglot--dir-split dir)
+					      ith-dir)))
+				       (unique-nickname (format "%s<%s>"
+							   (eglot--nickname-for dir)
+							   ith-name)))
+				  (cons dir unique-nickname)))
 			      project-directories))
 	     until (eglot--no-repeated? current-nicknames)
 	     finally return current-nicknames)))
@@ -995,19 +998,24 @@ All elements in PROJECT-DIRECTORIES must have same nickname per
   "Return a list of unique nicknames for each name in PROJECT-DIRECTORIES.
 Calls `eglot--nickname-for' on each name and then ensures all names are unique
 by adding a suffix on repeated nicknames"
-  (let* ((nickname-candidates
-	  (mapcar #'eglot--nickname-for project-directories)))
+  (let ((nickname-candidates
+	 (mapcar #'eglot--nickname-for project-directories)))
     (if (eglot--no-repeated? nickname-candidates)
 	nickname-candidates
       ;;else, add corresponding suffixes
-      (let ((grouped-by-nicknames
-	     (seq-group-by #'eglot--nickname-for project-directories)))
-	(cl-loop for (nick . same-nick-proj-dirs) in grouped-by-nicknames
-		 append (if (= 1 (length same-nick-proj-dirs))
-			    ;; single-element list (one dir, one nick)
-			    (list nick)
-			  ;; else, multiple dirs under same nick
-			  (eglot--add-unique-suffix same-nick-proj-dirs)))))))
+      (let* ((grouped-by-nicknames
+	      (seq-group-by #'eglot--nickname-for project-directories))
+	     (unique-nickname-per-proj-dir
+	      ;; assoc list where ⎡proj-dir⎦→⎡unique-nickname⎦
+	      (cl-loop for (nick . same-nick-proj-dirs) in grouped-by-nicknames
+		       append (if (= 1 (length same-nick-proj-dirs))
+				  ;; single-element list (one dir, one nick)
+				  (let ((single-proj-dir (car same-nick-proj-dirs)))
+				    (list (cons single-proj-dir nick)))
+				;; else, multiple dirs under same nick
+				(eglot--add-unique-suffix same-nick-proj-dirs)))))
+	(cl-loop for project-directory in project-directories
+		 collect (alist-get project-directory unique-nickname-per-proj-dir))))))
 
 (defun eglot--error (format &rest args)
   "Error out with FORMAT with ARGS."
