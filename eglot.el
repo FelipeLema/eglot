@@ -682,7 +682,7 @@ be guessed."
                      ((null guess)
                       (format "[eglot] Sorry, couldn't guess for `%s'!\n%s"
 			      managed-mode base-prompt))
-                     ((and program (not (eglot--executable-find program project)))
+                     ((and program (not (eglot--executable-find program)))
                       (concat (format "[eglot] I guess you want to run `%s'"
 				      program-guess)
                               (format ", but I can't find `%s' in PATH!" program)
@@ -1109,35 +1109,29 @@ CONNECT-ARGS are passed as additional arguments to
   (let ((warning-minimum-level :error))
     (display-warning 'eglot (apply #'format format args) :warning)))
 
-(defun eglot--executable-find (program &optional project)
+(defun eglot--executable-find (program)
   "Like `executable-find' PROGRAM, but support remote files.
 
-Use PROJECT root to tell if we're using a remote setup, else
-use `default-directory'."
-  (let ((root (or (and project
-		       (cdr project))
-		  default-directory)))
-    (if-let* ((remote-project-handler (file-remote-p root)))
-	;; remotely find program
-	(eglot--from-server-local-file
-	 (or
-	  ;; find executable from relative name in PATH
-	  (with-parsed-tramp-file-name root nil
-	    (tramp-find-executable v
-				   program
-				   (tramp-get-remote-path v)
-				   nil
-				   t))
-	  ;; ↑ no luck with testing PATH…
-	  ;; ↓ maybe program is a full path, let's check if it's executable
-	  (and
-	   (file-executable-p
-	    (eglot--from-server-local-file program
-					   project))
-	   program))
-	 project)
-      ;; else, locally find program
-      (executable-find program))))
+PROGRAM may or may not be remote.
+
+I can't believe we don't have this for 26."
+  (if-let* ((remote-project-handler (file-remote-p program)))
+      ;; remotely find remote program
+      (or
+       ;; find executable from relative name in remote PATH
+       (with-parsed-tramp-file-name program nil
+	 (tramp-find-executable v
+				program
+				(tramp-get-remote-path v)
+				nil
+				t))
+       ;; ↑ no luck with testing PATH…
+       ;; ↓ maybe program is a full path, let's check if it's executable
+       (and
+	(file-executable-p program )
+	program))
+    ;; else, locally find program
+    (executable-find program)))
 
 (defun eglot-current-column () (- (point) (point-at-bol)))
 
